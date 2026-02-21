@@ -1,0 +1,344 @@
+import React, { useEffect, useState } from "react";
+import socket from "./Socket";   // ✅ USE SINGLE SOCKET INSTANCE
+
+function Chat() {
+  const myId = localStorage.getItem("userId");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [friends, setFriends] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [searchEmail, setSearchEmail] = useState("");
+  
+  /* ================= SOCKET CONNECT + REGISTER ================= */
+  useEffect(() => {
+    if (!socket.connected) {
+      socket.connect();   // reconnect if page refreshed
+    }
+
+    if (myId) {
+      socket.emit("register", myId);
+    }
+  }, [myId]);
+
+  /* ================= INCOMING CALL LISTENER ================= */
+ useEffect(() => {
+  socket.on("incoming-call", ({ from, channel }) => {
+    console.log("📞 Incoming call received from:", from, "channel:", channel);
+
+    const accept = window.confirm("Incoming Video Call 📞");
+
+    if (accept) {
+      window.location.href = `/video/${channel}`;   // ✅ NOT wiACndow.open
+    }
+  });
+
+  return () => socket.off("incoming-call");
+}, []);
+   
+  /* ================= LOAD FRIEND LIST ================= */
+  useEffect(() => {
+    loadFriends();
+  }, []);
+
+  const loadFriends = async () => {
+    const res = await fetch(`http://localhost:5000/friends/${myId}`);
+    const data = await res.json();
+    setFriends(data);
+  };
+
+  /* ================= LOAD MESSAGES ================= */
+  const loadMessages = async (friend) => {
+    setSelectedUser(friend);
+
+    const res = await fetch(
+      `http://localhost:5000/messages/${myId}/${friend._id}`
+    );
+    const data = await res.json();
+    setMessages(data);
+  };
+
+  /* ================= SEND MESSAGE ================= */
+  const sendMessage = async () => {
+    if (!input.trim() || !selectedUser) return;
+
+    await fetch("http://localhost:5000/send-message", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: myId,
+        receiver: selectedUser._id,
+        message: input,
+      }),
+    });
+
+    setInput("");
+    loadMessages(selectedUser);
+  };
+
+  /* ================= ADD FRIEND BY EMAIL ================= */
+  const addFriend = async () => {
+    if (!searchEmail) return alert("Enter email");
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/search-user?email=${encodeURIComponent(
+          searchEmail
+        )}`
+      );
+      const data = await res.json();
+
+      if (!res.ok) return alert(data.error);
+
+      await fetch("http://localhost:5000/add-friend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: myId,
+          friendId: data.userId,
+        }),
+      });
+
+      alert("Friend added 🎉");
+      setSearchEmail("");
+      loadFriends();
+    } catch (err) {
+      alert("Error adding friend");
+    }
+  };
+
+  /* ================= START VIDEO CALL ================= */
+  const startVideoCall = () => {
+    if (!selectedUser) return alert("Select a friend first");
+
+    const channel = [myId, selectedUser._id].sort().join("_");
+
+    // Notify other user
+    socket.emit("call-user", {
+      to: selectedUser._id,
+      from: myId,
+      channel,
+    });
+
+    // Open own video page
+    window.open(`/video/${channel}`, "_blank");
+  };
+
+ return (
+  <div
+    style={{
+      display: "flex",
+      height: "100vh",
+      fontFamily: "Arial",
+      overflow: "hidden",
+    }}
+  >
+    {/* ================= LEFT SIDEBAR ================= */}
+    <div
+      style={{
+        width: isMobile ? "100%" : "30%",
+        display: isMobile && selectedUser ? "none" : "block",
+        borderRight: "1px solid #ddd",
+        backgroundColor: "#f0f2f5",
+        overflowY: "auto",
+      }}
+    >
+      <div style={{ padding: "15px", fontWeight: "bold" }}>Chats</div>
+
+      {/* Add Friend */}
+      <div style={{ padding: "10px" }}>
+        <input
+          placeholder="Add friend by email"
+          value={searchEmail}
+          onChange={(e) => setSearchEmail(e.target.value)}
+          style={{ width: "100%", padding: "8px" }}
+        />
+        <button
+          onClick={addFriend}
+          style={{
+            marginTop: "5px",
+            width: "100%",
+            padding: "8px",
+            backgroundColor: "#25d366",
+            border: "none",
+            color: "white",
+          }}
+        >
+          Add Friend
+        </button>
+      </div>
+
+      <button
+        onClick={() => (window.location.href = "/history")}
+        style={{
+          margin: 10,
+          padding: 8,
+          background: "#25d366",
+          color: "white",
+          border: "none",
+          borderRadius: 5,
+          cursor: "pointer",
+        }}
+      >
+        📞 Call History
+      </button>
+
+      {/* Friend List */}
+      {friends.map((friend) => (
+        <div
+          key={friend._id}
+          onClick={() => loadMessages(friend)}
+          style={{
+            padding: "15px",
+            cursor: "pointer",
+            borderBottom: "1px solid #eee",
+            backgroundColor:
+              selectedUser?._id === friend._id ? "#ddd" : "transparent",
+          }}
+        >
+          <div style={{ fontWeight: "bold" }}>{friend.name}</div>
+          <div style={{ fontSize: "12px", color: "gray" }}>
+            {friend.email}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* ================= RIGHT CHAT AREA ================= */}
+    <div
+      style={{
+        flex: 1,
+        display: isMobile && !selectedUser ? "none" : "flex",
+        flexDirection: "column",
+      }}
+    >
+      {selectedUser && (
+        <>
+          {/* Header */}
+          <div
+            style={{
+              padding: "15px",
+              borderBottom: "1px solid #ddd",
+              fontWeight: "bold",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: "white",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {isMobile && (
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ←
+                </button>
+              )}
+              {selectedUser.name}
+            </div>
+
+            <button
+              onClick={startVideoCall}
+              style={{
+                padding: "6px 12px",
+                background: "#25d366",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+              }}
+            >
+              📹
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div
+            style={{
+              flex: 1,
+              padding: "15px",
+              overflowY: "auto",
+              backgroundColor: "#e5ddd5",
+              paddingBottom: "70px",
+            }}
+          >
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  justifyContent:
+                    msg.sender === myId ? "flex-end" : "flex-start",
+                  marginBottom: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    backgroundColor:
+                      msg.sender === myId ? "#dcf8c6" : "white",
+                    padding: "10px 15px",
+                    borderRadius: "15px",
+                    maxWidth: isMobile ? "80%" : "60%",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {msg.message}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: isMobile ? 0 : "30%",
+              right: 0,
+              padding: "10px",
+              borderTop: "1px solid #ddd",
+              display: "flex",
+              gap: "10px",
+              background: "white",
+            }}
+          >
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type message"
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "20px",
+                border: "1px solid #ccc",
+              }}
+            />
+            <button
+              onClick={sendMessage}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "20px",
+                border: "none",
+                backgroundColor: "#25d366",
+                color: "white",
+              }}
+            >
+              Send
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+);
+}
+
+export default Chat;
