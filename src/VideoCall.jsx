@@ -3,6 +3,7 @@ import AgoraRTC from "agora-rtc-sdk-ng";
 import { useNavigate } from "react-router-dom";
 import socket from "./Socket";
 import './CSS/VideoCall.css';
+
 const APP_ID = "856700ed462044a1846e5f7379d2bcda";
 const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
@@ -11,6 +12,7 @@ function VideoCall({ channelName }) {
   const localRef = useRef(null);
   const remoteRef = useRef(null);
   const localTracks = useRef([]);
+  const currentCam = useRef("user"); // 🔄 camera state
 
   useEffect(() => {
     const init = async () => {
@@ -108,7 +110,42 @@ function VideoCall({ channelName }) {
     };
   }, [channelName, navigate]);
 
-  const leaveCall = async () => {
+  /* ================= CAMERA SWITCH ================= */
+  const switchCamera = async () => {
+    try {
+      const newFacing =
+        currentCam.current === "user" ? "environment" : "user";
+
+      const newCamTrack = await AgoraRTC.createCameraVideoTrack({
+        facingMode: newFacing,
+      });
+
+      const oldCamTrack = localTracks.current[1];
+
+      await client.unpublish(oldCamTrack);
+
+      oldCamTrack.stop();
+      oldCamTrack.close();
+
+      localTracks.current[1] = newCamTrack;
+
+      newCamTrack.play(localRef.current);
+
+      await client.publish(newCamTrack);
+
+      currentCam.current = newFacing;
+    } catch (err) {
+      console.log("Camera switch failed:", err);
+    }
+  };
+
+  /* ================= BACK TO CHAT (CALL RUNNING) ================= */
+  const goBackToChat = () => {
+    navigate("/chat");
+  };
+
+  /* ================= REAL END CALL ================= */
+  const endCall = async () => {
     socket.emit("end-call", { channel: channelName });
 
     localTracks.current.forEach((track) => {
@@ -130,9 +167,9 @@ function VideoCall({ channelName }) {
 
       {/* Bottom Controls */}
       <div className="controls">
-        <button className="end-btn" onClick={leaveCall}>
-          ❌
-        </button>
+        <button onClick={goBackToChat}>⬅️</button>
+        <button onClick={switchCamera}>🔄</button>
+        <button className="end-btn" onClick={endCall}>❌</button>
       </div>
     </div>
   );
