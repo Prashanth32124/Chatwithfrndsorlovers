@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import { useNavigate } from "react-router-dom";
 import socket from "./Socket";
-import './CSS/VideoCall.css';
+import "./CSS/VideoCall.css";
 
 const APP_ID = "856700ed462044a1846e5f7379d2bcda";
 const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
@@ -12,23 +12,20 @@ function VideoCall({ channelName }) {
   const localRef = useRef(null);
   const remoteRef = useRef(null);
   const localTracks = useRef([]);
-  const currentCam = useRef("user"); // 🔄 camera state
+  const currentCam = useRef("user");
+  const isCallMinimized = useRef(false); // 🧠 prevent cleanup when going back
 
   useEffect(() => {
     const init = async () => {
       try {
         console.log("Joining channel:", channelName);
 
-        if (!socket.connected) {
-          socket.connect();
-        }
+        if (!socket.connected) socket.connect();
 
         socket.emit("join-call-room", channelName);
 
         const myId = localStorage.getItem("userId");
-        if (myId) {
-          socket.emit("register", myId);
-        }
+        if (myId) socket.emit("register", myId);
 
         const forceLeave = async () => {
           try {
@@ -45,7 +42,6 @@ function VideoCall({ channelName }) {
         };
 
         socket.off("call-ended");
-
         socket.on("call-ended", () => {
           console.log("📞 Call ended event received");
           forceLeave();
@@ -54,19 +50,12 @@ function VideoCall({ channelName }) {
         client.on("user-published", async (user, mediaType) => {
           await client.subscribe(user, mediaType);
 
-          if (mediaType === "video") {
-            user.videoTrack.play(remoteRef.current);
-          }
-
-          if (mediaType === "audio") {
-            user.audioTrack.play();
-          }
+          if (mediaType === "video") user.videoTrack.play(remoteRef.current);
+          if (mediaType === "audio") user.audioTrack.play();
         });
 
         client.on("user-unpublished", () => {
-          if (remoteRef.current) {
-            remoteRef.current.innerHTML = "";
-          }
+          if (remoteRef.current) remoteRef.current.innerHTML = "";
         });
 
         client.on("user-left", async () => {
@@ -88,7 +77,6 @@ function VideoCall({ channelName }) {
         localTracks.current = [micTrack, camTrack];
 
         camTrack.play(localRef.current);
-
         await client.publish(localTracks.current);
       } catch (err) {
         console.error("AGORA ERROR:", err);
@@ -100,13 +88,16 @@ function VideoCall({ channelName }) {
     return () => {
       socket.off("call-ended");
 
-      localTracks.current.forEach((track) => {
-        track.stop();
-        track.close();
-      });
+      // 🧠 Only cleanup if NOT minimized
+      if (!isCallMinimized.current) {
+        localTracks.current.forEach((track) => {
+          track.stop();
+          track.close();
+        });
 
-      client.leave();
-      client.removeAllListeners();
+        client.leave();
+        client.removeAllListeners();
+      }
     };
   }, [channelName, navigate]);
 
@@ -121,14 +112,13 @@ function VideoCall({ channelName }) {
       });
 
       const oldCamTrack = localTracks.current[1];
+      if (!oldCamTrack) return;
 
       await client.unpublish(oldCamTrack);
-
       oldCamTrack.stop();
       oldCamTrack.close();
 
       localTracks.current[1] = newCamTrack;
-
       newCamTrack.play(localRef.current);
 
       await client.publish(newCamTrack);
@@ -139,22 +129,29 @@ function VideoCall({ channelName }) {
     }
   };
 
-  /* ================= BACK TO CHAT (CALL RUNNING) ================= */
+  /* ================= BACK TO CHAT (CALL CONTINUES) ================= */
   const goBackToChat = () => {
+    isCallMinimized.current = true;
     navigate("/chat");
   };
 
-  /* ================= REAL END CALL ================= */
+  /* ================= END CALL ================= */
   const endCall = async () => {
-    socket.emit("end-call", { channel: channelName });
+    try {
+      socket.emit("end-call", { channel: channelName });
 
-    localTracks.current.forEach((track) => {
-      track.stop();
-      track.close();
-    });
+      localTracks.current.forEach((track) => {
+        track.stop();
+        track.close();
+      });
 
-    await client.leave();
-    navigate("/chat");
+      await client.leave();
+      client.removeAllListeners();
+
+      navigate("/chat");
+    } catch (err) {
+      console.log(err);
+    }
   };
 
   return (
@@ -165,11 +162,13 @@ function VideoCall({ channelName }) {
       {/* Local Floating */}
       <div ref={localRef} className="local-video" />
 
-      {/* Bottom Controls */}
+      {/* Controls */}
       <div className="controls">
         <button onClick={goBackToChat}>⬅️</button>
         <button onClick={switchCamera}>🔄</button>
-        <button className="end-btn" onClick={endCall}>❌</button>
+        <button className="end-btn" onClick={endCall}>
+          ❌
+        </button>
       </div>
     </div>
   );
