@@ -12,7 +12,7 @@ function History() {
 
   const loadHistory = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/call-history/${userId}`);
+      const res = await fetch(`https://chatwithfrndsorloversbackend.onrender.com/call-history/${userId}`);
       const data = await res.json();
       setCalls(data);
     } catch {

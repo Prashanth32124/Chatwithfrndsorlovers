@@ -15,7 +15,7 @@ function Signup() {
     const cleanEmail = email.trim().toLowerCase();
 
     try {
-      const res = await fetch("http://localhost:5000/signup", {
+      const res = await fetch("https://chatwithfrndsorloversbackend.onrender.com/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

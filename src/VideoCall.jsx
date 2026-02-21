@@ -81,7 +81,7 @@ function VideoCall({ channelName }) {
 
         /* ================= GET TOKEN ================= */
         const res = await fetch(
-          `http://localhost:5000/generate-token/${channelName}`
+          `https://chatwithfrndsorloversbackend.onrender.com/generate-token/${channelName}`
         );
         const data = await res.json();
         const token = data.token;

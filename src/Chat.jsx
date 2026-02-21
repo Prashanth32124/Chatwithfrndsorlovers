@@ -42,7 +42,7 @@ function Chat() {
   }, []);
 
   const loadFriends = async () => {
-    const res = await fetch(`http://localhost:5000/friends/${myId}`);
+    const res = await fetch(`https://chatwithfrndsorloversbackend.onrender.com/friends/${myId}`);
     const data = await res.json();
     setFriends(data);
   };
@@ -52,7 +52,7 @@ function Chat() {
     setSelectedUser(friend);
 
     const res = await fetch(
-      `http://localhost:5000/messages/${myId}/${friend._id}`
+      `https://chatwithfrndsorloversbackend.onrender.com/messages/${myId}/${friend._id}`
     );
     const data = await res.json();
     setMessages(data);
@@ -62,7 +62,7 @@ function Chat() {
   const sendMessage = async () => {
     if (!input.trim() || !selectedUser) return;
 
-    await fetch("http://localhost:5000/send-message", {
+    await fetch("https://chatwithfrndsorloversbackend.onrender.com/send-message", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -84,7 +84,7 @@ function Chat() {
 
     try {
       const res = await fetch(
-        `http://localhost:5000/search-user?email=${encodeURIComponent(
+        `https://chatwithfrndsorloversbackend.onrender.com/search-user?email=${encodeURIComponent(
           searchEmail
         )}`
       );
@@ -92,7 +92,7 @@ function Chat() {
 
       if (!res.ok) return alert(data.error);
 
-      await fetch("http://localhost:5000/add-friend", {
+      await fetch("https://chatwithfrndsorloversbackend.onrender.com/add-friend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
