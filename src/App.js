@@ -5,8 +5,6 @@ import Chat from './Chat';
 import Login from './Login';
 import Signup from './Signup';
 import VideoCall from './VideoCall';
-import socket from "./Socket.js";
-import { useEffect } from "react";
 import History from "./History";
 /* Wrapper to read channel from URL */
 function VideoWrapper() {

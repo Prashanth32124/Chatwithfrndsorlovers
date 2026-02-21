@@ -7,8 +7,9 @@ function History() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadHistory();
-  }, []);
+  loadHistory();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   const loadHistory = async () => {
     try {

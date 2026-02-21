@@ -3,7 +3,7 @@ import socket from "./Socket";   // ✅ USE SINGLE SOCKET INSTANCE
 
 function Chat() {
   const myId = localStorage.getItem("userId");
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile] = useState(window.innerWidth < 768);
   const [friends, setFriends] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -38,8 +38,9 @@ function Chat() {
    
   /* ================= LOAD FRIEND LIST ================= */
   useEffect(() => {
-    loadFriends();
-  }, []);
+  loadFriends();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   const loadFriends = async () => {
     const res = await fetch(`https://chatwithfrndsorloversbackend.onrender.com/friends/${myId}`);

@@ -73,8 +73,21 @@ socket.emit("register", data.userId);
         </button>
 
         <p style={{ marginTop: 15 }}>
-          Don't have an account? <span style={styles.link}>Register</span>
-        </p>
+  Don't have an account?{" "}
+  <button
+    onClick={() => (window.location.href = "/Signup")}
+    style={{
+      background: "none",
+      border: "none",
+      color: "#25d366",
+      cursor: "pointer",
+      fontWeight: "bold",
+      textDecoration: "underline"
+    }}
+  >
+    Register
+  </button>
+</p>
       </div>
     </div>
   );
