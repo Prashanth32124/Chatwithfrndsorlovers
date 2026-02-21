@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import { useNavigate } from "react-router-dom";
 import socket from "./Socket";
-
+import './CSS/VideoCall.css';
 const APP_ID = "856700ed462044a1846e5f7379d2bcda";
 const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
@@ -17,21 +17,17 @@ function VideoCall({ channelName }) {
       try {
         console.log("Joining channel:", channelName);
 
-        /* ================= SAFE SOCKET CONNECT ================= */
         if (!socket.connected) {
           socket.connect();
         }
 
-        /* ================= JOIN CALL ROOM ================= */
         socket.emit("join-call-room", channelName);
 
-        /* ================= RE-REGISTER USER (FIX CHAT) ================= */
         const myId = localStorage.getItem("userId");
         if (myId) {
           socket.emit("register", myId);
         }
 
-        /* ================= FORCE LEAVE FUNCTION ================= */
         const forceLeave = async () => {
           try {
             localTracks.current.forEach((track) => {
@@ -46,16 +42,13 @@ function VideoCall({ channelName }) {
           }
         };
 
-        /* ================= PREVENT DUPLICATE LISTENERS ================= */
         socket.off("call-ended");
 
-        /* ================= SOCKET: CALL ENDED ================= */
         socket.on("call-ended", () => {
           console.log("📞 Call ended event received");
           forceLeave();
         });
 
-        /* ================= AGORA EVENTS ================= */
         client.on("user-published", async (user, mediaType) => {
           await client.subscribe(user, mediaType);
 
@@ -79,28 +72,22 @@ function VideoCall({ channelName }) {
           forceLeave();
         });
 
-        /* ================= GET TOKEN ================= */
         const res = await fetch(
           `https://chatwithfrndsorloversbackend.onrender.com/generate-token/${channelName}`
         );
         const data = await res.json();
         const token = data.token;
 
-        /* ================= JOIN CHANNEL ================= */
         await client.join(APP_ID, channelName, token || null, null);
 
-        /* ================= CREATE TRACKS ================= */
         const [micTrack, camTrack] =
           await AgoraRTC.createMicrophoneAndCameraTracks();
 
         localTracks.current = [micTrack, camTrack];
 
-        /* ================= PLAY LOCAL VIDEO ================= */
         camTrack.play(localRef.current);
 
-        /* ================= PUBLISH ================= */
         await client.publish(localTracks.current);
-
       } catch (err) {
         console.error("AGORA ERROR:", err);
       }
@@ -108,7 +95,6 @@ function VideoCall({ channelName }) {
 
     init();
 
-    /* ================= CLEANUP ================= */
     return () => {
       socket.off("call-ended");
 
@@ -122,7 +108,6 @@ function VideoCall({ channelName }) {
     };
   }, [channelName, navigate]);
 
-  /* ================= MANUAL LEAVE ================= */
   const leaveCall = async () => {
     socket.emit("end-call", { channel: channelName });
 
@@ -136,44 +121,19 @@ function VideoCall({ channelName }) {
   };
 
   return (
-    <div style={{ textAlign: "center", paddingTop: 20 }}>
-      <h2>Video Call</h2>
+    <div className="call-container">
+      {/* Remote Full Screen */}
+      <div ref={remoteRef} className="remote-video" />
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 20 }}>
-        {/* LOCAL VIDEO */}
-        <div>
-          <h4>You</h4>
-          <div
-            ref={localRef}
-            style={{ width: 350, height: 250, background: "black" }}
-          />
-        </div>
+      {/* Local Floating */}
+      <div ref={localRef} className="local-video" />
 
-        {/* REMOTE VIDEO */}
-        <div>
-          <h4>Friend</h4>
-          <div
-            ref={remoteRef}
-            style={{ width: 350, height: 250, background: "black" }}
-          />
-        </div>
+      {/* Bottom Controls */}
+      <div className="controls">
+        <button className="end-btn" onClick={leaveCall}>
+          ❌
+        </button>
       </div>
-
-      <br />
-
-      <button
-        onClick={leaveCall}
-        style={{
-          padding: "10px 20px",
-          background: "red",
-          color: "white",
-          border: "none",
-          borderRadius: 5,
-          cursor: "pointer",
-        }}
-      >
-        End Call ❌
-      </button>
     </div>
   );
 }

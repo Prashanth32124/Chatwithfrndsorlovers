@@ -81,8 +81,14 @@ function Signup() {
         </button>
 
         <p style={{ marginTop: 15 }}>
-          Already have an account? <span style={styles.link}>Login</span>
-        </p>
+      Already have an account?{' '}
+      <span 
+        style={styles.link} 
+        onClick={() => navigate('/')} // Navigates to the root path
+      >
+        Login
+      </span>
+    </p>
       </div>
     </div>
   );
