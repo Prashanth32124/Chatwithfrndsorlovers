@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import socket from "./Socket";   // ✅ USE SINGLE SOCKET INSTANCE
-
+import { useRef } from "react";
 function Chat() {
   const myId = localStorage.getItem("userId");
   const [isMobile] = useState(window.innerWidth < 768);
@@ -9,7 +9,7 @@ function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [searchEmail, setSearchEmail] = useState("");
-  
+  const bottomRef = useRef(null);
   /* ================= SOCKET CONNECT + REGISTER ================= */
   useEffect(() => {
   if (!socket.connected) socket.connect();
@@ -23,6 +23,31 @@ function Chat() {
 
   return () => socket.off("connect");
 }, [myId]);
+useEffect(() => {
+  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+}, [messages]);
+/* ================= REALTIME MESSAGE LISTENER ================= */
+useEffect(() => {
+  const handler = (msg) => {
+    console.log("RECEIVED:", msg);
+
+    if (!selectedUser) return;
+
+    const isCurrentChat =
+      msg.sender === selectedUser._id ||
+      msg.receiver === selectedUser._id;
+
+    if (!isCurrentChat) return;
+
+    setMessages((prev) => {
+      if (prev.some((m) => m._id === msg._id)) return prev;
+      return [...prev, msg];
+    });
+  };
+
+  socket.on("new-message", handler);
+  return () => socket.off("new-message", handler);
+}, [selectedUser]);
   /* ================= INCOMING CALL LISTENER ================= */
  useEffect(() => {
   socket.on("incoming-call", ({ from, channel }) => {
@@ -64,25 +89,24 @@ function Chat() {
   };
 
   /* ================= SEND MESSAGE ================= */
-  const sendMessage = async () => {
-    if (!input.trim() || !selectedUser) return;
+/* ================= SEND MESSAGE ================= */
+const sendMessage = () => {
+  console.log("sendMessage fired", input, selectedUser);
 
-    await fetch("https://chatwithfrndsorloversbackend.onrender.com/send-message", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sender: myId,
-        receiver: selectedUser._id,
-        message: input,
-      }),
-    });
+  if (!input.trim() || !selectedUser) {
+    console.log("BLOCKED: empty or no user");
+    return;
+  }
 
-    setInput("");
-    loadMessages(selectedUser);
-  };
+  socket.emit("send-message", {
+    sender: myId,
+    receiver: selectedUser._id,
+    message: input.trim(),
+  });
 
+  console.log("EMITTED");
+  setInput("");
+};
   /* ================= ADD FRIEND BY EMAIL ================= */
   const addFriend = async () => {
     if (!searchEmail) return alert("Enter email");
@@ -303,6 +327,7 @@ function Chat() {
                 </div>
               </div>
             ))}
+            <div ref={bottomRef} />
           </div>
 
           {/* Input */}
@@ -332,17 +357,20 @@ function Chat() {
   }}
 />
             <button
-              onClick={sendMessage}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "20px",
-                border: "none",
-                backgroundColor: "#25d366",
-                color: "white",
-              }}
-            >
-              Send
-            </button>
+  onClick={() => {
+    console.log("BUTTON CLICKED");
+    sendMessage();
+  }}
+  style={{
+    padding: "10px 20px",
+    borderRadius: "20px",
+    border: "none",
+    backgroundColor: "#25d366",
+    color: "white",
+  }}
+>
+  Send
+</button>
           </div>
         </>
       )}
@@ -351,4 +379,4 @@ function Chat() {
 );
 }
 
-export default Chat;
+export default Chat; 
