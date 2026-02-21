@@ -151,11 +151,15 @@ function Chat() {
       {/* Add Friend */}
       <div style={{ padding: "10px" }}>
         <input
-          placeholder="Add friend by email"
-          value={searchEmail}
-          onChange={(e) => setSearchEmail(e.target.value)}
-          style={{ width: "100%", padding: "8px" }}
-        />
+  placeholder="Add friend by email"
+  value={searchEmail}
+  onChange={(e) => setSearchEmail(e.target.value)}
+  style={{
+    width: "100%",
+    padding: "8px",
+    fontSize: "16px"   // ✅ IMPORTANT
+  }}
+/>
         <button
           onClick={addFriend}
           style={{
@@ -312,16 +316,17 @@ function Chat() {
             }}
           >
             <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type message"
-              style={{
-                flex: 1,
-                padding: "10px",
-                borderRadius: "20px",
-                border: "1px solid #ccc",
-              }}
-            />
+  value={input}
+  onChange={(e) => setInput(e.target.value)}
+  placeholder="Type message"
+  style={{
+    flex: 1,
+    padding: "10px",
+    borderRadius: "20px",
+    border: "1px solid #ccc",
+    fontSize: "16px"   // ✅ IMPORTANT
+  }}
+/>
             <button
               onClick={sendMessage}
               style={{
