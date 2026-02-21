@@ -67,4 +67,5 @@ class CallManager {
   }
 }
 
-export default new CallManager();
+const callManager = new CallManager();
+export default callManager;
