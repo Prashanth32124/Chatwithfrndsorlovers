@@ -71,19 +71,21 @@ useEffect(() => {
   return () => socket.off("new-message", handler);
 }, [selectedUser]);
   /* ================= INCOMING CALL LISTENER ================= */
-useEffect(() => {
-  const handler = ({ from, channel }) => {
+ useEffect(() => {
+  socket.on("incoming-call", ({ from, channel }) => {
     console.log("📞 Incoming call received:", from, channel);
 
     setTimeout(() => {
       const accept = window.confirm(`Incoming call from ${from}`);
-      if (accept) navigate(`/video/${channel}`);
-    }, 100);
-  };
 
-  socket.on("incoming-call", handler);
-  return () => socket.off("incoming-call", handler);
-}, [navigate]);
+      if (accept) {
+       navigate(`/video/${channel}`);
+      }
+    }, 100);
+  });
+
+  return () => socket.off("incoming-call");
+}, []);
    
   /* ================= LOAD FRIEND LIST ================= */
   useEffect(() => {
