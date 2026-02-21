@@ -10,6 +10,26 @@ function Chat() {
   const [input, setInput] = useState("");
   const [searchEmail, setSearchEmail] = useState("");
   const bottomRef = useRef(null);
+  const [activeCallChannel, setActiveCallChannel] = useState(
+  localStorage.getItem("activeCallChannel")
+);
+useEffect(() => {
+  const syncCallBar = () => {
+    setActiveCallChannel(localStorage.getItem("activeCallChannel"));
+  };
+
+  // 🔹 run once immediately
+  syncCallBar();
+
+  window.addEventListener("call-state-changed", syncCallBar);
+  window.addEventListener("storage", syncCallBar);
+
+  return () => {
+    window.removeEventListener("call-state-changed", syncCallBar);
+    window.removeEventListener("storage", syncCallBar);
+  };
+}, []);
+
   /* ================= SOCKET CONNECT + REGISTER ================= */
   useEffect(() => {
   if (!socket.connected) socket.connect();
@@ -375,6 +395,17 @@ const sendMessage = () => {
         </>
       )}
     </div>
+    {activeCallChannel && (
+  <div
+    className="return-call-bar"
+    onClick={() =>
+      (window.location.href = `/video/${activeCallChannel}`)
+    }
+  >
+    📞 Return to Call
+  </div>
+  
+)}
   </div>
 );
 }
