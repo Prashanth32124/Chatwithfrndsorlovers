@@ -12,25 +12,29 @@ function Chat() {
   
   /* ================= SOCKET CONNECT + REGISTER ================= */
   useEffect(() => {
-    if (!socket.connected) {
-      socket.connect();   // reconnect if page refreshed
-    }
+  if (!socket.connected) socket.connect();
 
+  socket.on("connect", () => {
     if (myId) {
+      console.log("Registering user:", myId);
       socket.emit("register", myId);
     }
-  }, [myId]);
+  });
 
+  return () => socket.off("connect");
+}, [myId]);
   /* ================= INCOMING CALL LISTENER ================= */
  useEffect(() => {
   socket.on("incoming-call", ({ from, channel }) => {
-    console.log("📞 Incoming call received from:", from, "channel:", channel);
+    console.log("📞 Incoming call received:", from, channel);
 
-    const accept = window.confirm("Incoming Video Call 📞");
+    setTimeout(() => {
+      const accept = window.confirm(`Incoming call from ${from}`);
 
-    if (accept) {
-      window.location.href = `/video/${channel}`;   // ✅ NOT wiACndow.open
-    }
+      if (accept) {
+        window.location.href = `/video/${channel}`;
+      }
+    }, 100);
   });
 
   return () => socket.off("incoming-call");
@@ -124,7 +128,7 @@ function Chat() {
     });
 
     // Open own video page
-    window.open(`/video/${channel}`, "_blank");
+    window.location.href = `/video/${channel}`;
   };
 
  return (
