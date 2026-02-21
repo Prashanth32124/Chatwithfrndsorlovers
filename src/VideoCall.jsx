@@ -1,24 +1,36 @@
 import React, { useEffect, useRef, useState } from "react";
-import AgoraRTC from "agora-rtc-sdk-ng";
 import { useNavigate } from "react-router-dom";
 import socket from "./Socket";
+import CallManager from "./CallManager";
+import AgoraRTC from "agora-rtc-sdk-ng";
 import "./CSS/VideoCall.css";
-
-const APP_ID = "856700ed462044a1846e5f7379d2bcda";
-const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
 function VideoCall({ channelName }) {
   const navigate = useNavigate();
   const localRef = useRef(null);
   const remoteRef = useRef(null);
-  const localTracks = useRef([]);
   const currentCam = useRef("user");
-  const isCallMinimized = useRef(false);
-  const joinedRef = useRef(false); // 🔥 prevent double join
 
   const [isMuted, setIsMuted] = useState(false);
 
-  /* ================= TIMER (PERSISTENT) ================= */
+  /* ================= CALL END LISTENER ================= */
+  useEffect(() => {
+    const handleCallEnded = async () => {
+      console.log("📴 Other user ended the call");
+
+      await CallManager.leave();
+
+      localStorage.removeItem("activeCallChannel");
+      localStorage.removeItem("callStartTime");
+
+      navigate("/chat");
+    };
+
+    socket.on("call-ended", handleCallEnded);
+    return () => socket.off("call-ended", handleCallEnded);
+  }, [navigate]);
+
+  /* ================= TIMER ================= */
   const [callTime, setCallTime] = useState(() => {
     const start = Number(localStorage.getItem("callStartTime"));
     return start ? Math.floor((Date.now() - start) / 1000) : 0;
@@ -35,154 +47,146 @@ function VideoCall({ channelName }) {
     return () => clearInterval(interval);
   }, []);
 
-  const formatTime = (seconds) => {
-    const h = String(Math.floor(seconds / 3600)).padStart(2, "0");
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0");
-    const s = String(seconds % 60).padStart(2, "0");
-    return `${h}:${m}:${s}`;
+  const formatTime = (s) => {
+    const h = String(Math.floor(s / 3600)).padStart(2, "0");
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const sec = String(s % 60).padStart(2, "0");
+    return `${h}:${m}:${sec}`;
   };
 
-  /* ================= CALL INIT ================= */
+  /* ================= INIT ================= */
   useEffect(() => {
+    let mounted = true;
+
     const init = async () => {
       try {
-        if (joinedRef.current) return; // 🔥 avoid rejoin bug
-        joinedRef.current = true;
-
+        /* Join socket call room ALWAYS */
         if (!socket.connected) socket.connect();
-
         socket.emit("join-call-room", channelName);
 
-        const myId = localStorage.getItem("userId");
-        if (myId) socket.emit("register", myId);
+        /* Attach ONLY our listeners (not wiping SDK) */
+        CallManager.client.removeAllListeners("user-published");
+        CallManager.client.removeAllListeners("user-left");
 
+        CallManager.client.on("user-published", async (user, type) => {
+          await CallManager.client.subscribe(user, type);
+
+          if (type === "video" && remoteRef.current) {
+            user.videoTrack.play(remoteRef.current);
+          }
+          if (type === "audio") {
+            user.audioTrack.play();
+          }
+        });
+
+        CallManager.client.on("user-left", () => {
+          if (remoteRef.current) remoteRef.current.innerHTML = "";
+        });
+
+        const alreadyInCall =
+          CallManager.joined &&
+          CallManager.channel === channelName;
+
+        /* ===== RETURN TO CALL (NO REJOIN) ===== */
+        if (alreadyInCall) {
+          console.log("♻️ Reattaching existing call");
+
+          if (CallManager.localTracks[1] && localRef.current) {
+            CallManager.localTracks[1].play(localRef.current);
+          }
+
+          CallManager.client.remoteUsers.forEach(user => {
+            if (user.videoTrack && remoteRef.current) {
+              user.videoTrack.play(remoteRef.current);
+            }
+            if (user.audioTrack) user.audioTrack.play();
+          });
+
+          return;
+        }
+
+        /* ===== FIRST TIME JOIN ===== */
         localStorage.setItem("activeCallChannel", channelName);
-        window.dispatchEvent(new Event("call-state-changed"));
 
         if (!localStorage.getItem("callStartTime")) {
           localStorage.setItem("callStartTime", Date.now());
         }
-
-        const forceLeave = async () => {
-          if (isCallMinimized.current) return; // 🔥 DO NOT LEAVE when minimized
-
-          localTracks.current.forEach((track) => {
-            track.stop();
-            track.close();
-          });
-
-          await client.leave();
-
-          localStorage.removeItem("activeCallChannel");
-          localStorage.removeItem("callStartTime");
-          window.dispatchEvent(new Event("call-state-changed"));
-
-          navigate("/chat");
-        };
-
-        socket.off("call-ended");
-        socket.on("call-ended", forceLeave);
-
-        client.on("user-published", async (user, mediaType) => {
-          await client.subscribe(user, mediaType);
-          if (mediaType === "video") user.videoTrack.play(remoteRef.current);
-          if (mediaType === "audio") user.audioTrack.play();
-        });
-
-        client.on("user-left", forceLeave);
 
         const res = await fetch(
           `https://chatwithfrndsorloversbackend.onrender.com/generate-token/${channelName}`
         );
         const { token } = await res.json();
 
-        await client.join(APP_ID, channelName, token || null, null);
+        await CallManager.join(channelName, token);
 
-        const [micTrack, camTrack] =
-          await AgoraRTC.createMicrophoneAndCameraTracks();
+        if (!mounted) return;
 
-        localTracks.current = [micTrack, camTrack];
+        if (CallManager.localTracks[1] && localRef.current) {
+          CallManager.localTracks[1].play(localRef.current);
+        }
 
-        camTrack.play(localRef.current);
-        await client.publish(localTracks.current);
       } catch (err) {
-        console.log(err);
+        console.log("INIT ERROR:", err);
       }
     };
 
     init();
-
-    return () => {
-      if (isCallMinimized.current) return; // 🔥 keep call alive
-
-      localTracks.current.forEach((track) => {
-        track.stop();
-        track.close();
-      });
-
-      client.leave();
-      client.removeAllListeners();
-    };
-  }, [channelName, navigate]);
+    return () => (mounted = false);
+  }, [channelName]);
 
   /* ================= CAMERA SWITCH ================= */
   const switchCamera = async () => {
-    const newFacing =
-      currentCam.current === "user" ? "environment" : "user";
+    try {
+      const newFacing =
+        currentCam.current === "user" ? "environment" : "user";
 
-    const newTrack = await AgoraRTC.createCameraVideoTrack({
-      facingMode: newFacing,
-    });
+      const newTrack = await AgoraRTC.createCameraVideoTrack({
+        facingMode: newFacing,
+      });
 
-    const oldTrack = localTracks.current[1];
-    if (!oldTrack) return;
+      const oldTrack = CallManager.localTracks[1];
+      if (!oldTrack) return;
 
-    await client.unpublish(oldTrack);
-    oldTrack.stop();
-    oldTrack.close();
+      await CallManager.client.unpublish(oldTrack);
+      oldTrack.stop();
+      oldTrack.close();
 
-    localTracks.current[1] = newTrack;
-    newTrack.play(localRef.current);
-    await client.publish(newTrack);
+      CallManager.localTracks[1] = newTrack;
 
-    currentCam.current = newFacing;
-  };
+      if (localRef.current) newTrack.play(localRef.current);
+      await CallManager.client.publish(newTrack);
 
-  /* ================= MUTE / UNMUTE ================= */
-  const toggleMute = async () => {
-    const micTrack = localTracks.current[0];
-    if (!micTrack) return;
-
-    if (isMuted) {
-      await micTrack.setEnabled(true);
-      setIsMuted(false);
-    } else {
-      await micTrack.setEnabled(false);
-      setIsMuted(true);
+      currentCam.current = newFacing;
+    } catch (err) {
+      console.log("CAMERA SWITCH ERROR:", err);
     }
   };
 
-  /* ================= BACK TO CHAT ================= */
-  const goBackToChat = () => {
-    isCallMinimized.current = true;
-    navigate("/chat");
+  /* ================= MUTE ================= */
+  const toggleMute = async () => {
+    try {
+      const mic = CallManager.localTracks[0];
+      if (!mic) return;
+
+      await mic.setEnabled(isMuted);
+      setIsMuted(!isMuted);
+    } catch (err) {
+      console.log("MUTE ERROR:", err);
+    }
   };
+
+  /* ================= RETURN TO CHAT ================= */
+  const goBackToChat = () => navigate("/chat");
 
   /* ================= END CALL ================= */
   const endCall = async () => {
-    socket.emit("end-call", { channel: channelName });
-
-    localTracks.current.forEach((track) => {
-      track.stop();
-      track.close();
-    });
-
-    await client.leave();
-    client.removeAllListeners();
+    if (CallManager.joined) {
+      socket.emit("end-call", { channel: channelName });
+      await CallManager.leave();
+    }
 
     localStorage.removeItem("activeCallChannel");
     localStorage.removeItem("callStartTime");
-    window.dispatchEvent(new Event("call-state-changed"));
 
     navigate("/chat");
   };
@@ -195,12 +199,12 @@ function VideoCall({ channelName }) {
       <div className="call-timer">{formatTime(callTime)}</div>
 
       <div className="controls">
-        <button className="control-btn" onClick={goBackToChat}>⬅️</button>
-        <button className="control-btn" onClick={switchCamera}>🔄</button>
-        <button className="control-btn" onClick={toggleMute}>
+        <button onClick={goBackToChat}>⬅️</button>
+        <button onClick={switchCamera}>🔄</button>
+        <button onClick={toggleMute}>
           {isMuted ? "🔇" : "🎤"}
         </button>
-        <button className="end-btn" onClick={endCall}>❌</button>
+        <button onClick={endCall}>❌</button>
       </div>
     </div>
   );

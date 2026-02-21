@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import socket from "./Socket";   // ✅ USE SINGLE SOCKET INSTANCE
 import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 function Chat() {
   const myId = localStorage.getItem("userId");
   const [isMobile] = useState(window.innerWidth < 768);
@@ -10,6 +11,7 @@ function Chat() {
   const [input, setInput] = useState("");
   const [searchEmail, setSearchEmail] = useState("");
   const bottomRef = useRef(null);
+  const navigate = useNavigate();
   const [activeCallChannel, setActiveCallChannel] = useState(
   localStorage.getItem("activeCallChannel")
 );
@@ -77,7 +79,7 @@ useEffect(() => {
       const accept = window.confirm(`Incoming call from ${from}`);
 
       if (accept) {
-        window.location.href = `/video/${channel}`;
+       navigate(`/video/${channel}`);
       }
     }, 100);
   });
@@ -172,7 +174,7 @@ const sendMessage = () => {
     });
 
     // Open own video page
-    window.location.href = `/video/${channel}`;
+   navigate(`/video/${channel}`);
   };
 
  return (
@@ -399,7 +401,7 @@ const sendMessage = () => {
   <div
     className="return-call-bar"
     onClick={() =>
-      (window.location.href = `/video/${activeCallChannel}`)
+      navigate(`/video/${activeCallChannel}`)
     }
   >
     📞 Return to Call
