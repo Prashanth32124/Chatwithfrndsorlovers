@@ -14,6 +14,7 @@ function VideoCall({ channelName }) {
   const localTracks = useRef([]);
   const currentCam = useRef("user");
   const isCallMinimized = useRef(false);
+  const joinedRef = useRef(false); // 🔥 prevent double join
 
   const [isMuted, setIsMuted] = useState(false);
 
@@ -45,6 +46,9 @@ function VideoCall({ channelName }) {
   useEffect(() => {
     const init = async () => {
       try {
+        if (joinedRef.current) return; // 🔥 avoid rejoin bug
+        joinedRef.current = true;
+
         if (!socket.connected) socket.connect();
 
         socket.emit("join-call-room", channelName);
@@ -60,6 +64,8 @@ function VideoCall({ channelName }) {
         }
 
         const forceLeave = async () => {
+          if (isCallMinimized.current) return; // 🔥 DO NOT LEAVE when minimized
+
           localTracks.current.forEach((track) => {
             track.stop();
             track.close();
@@ -107,7 +113,7 @@ function VideoCall({ channelName }) {
     init();
 
     return () => {
-      if (isCallMinimized.current) return;
+      if (isCallMinimized.current) return; // 🔥 keep call alive
 
       localTracks.current.forEach((track) => {
         track.stop();
@@ -147,8 +153,13 @@ function VideoCall({ channelName }) {
     const micTrack = localTracks.current[0];
     if (!micTrack) return;
 
-    await micTrack.setEnabled(isMuted);
-    setIsMuted(!isMuted);
+    if (isMuted) {
+      await micTrack.setEnabled(true);
+      setIsMuted(false);
+    } else {
+      await micTrack.setEnabled(false);
+      setIsMuted(true);
+    }
   };
 
   /* ================= BACK TO CHAT ================= */
