@@ -16,13 +16,21 @@ function VideoCall({ channelName }) {
   const isCallMinimized = useRef(false);
 
   const [isMuted, setIsMuted] = useState(false);
-  const [callTime, setCallTime] = useState(0);
 
-  /* ================= TIMER ================= */
+  /* ================= TIMER (PERSISTENT) ================= */
+  const [callTime, setCallTime] = useState(() => {
+    const start = Number(localStorage.getItem("callStartTime"));
+    return start ? Math.floor((Date.now() - start) / 1000) : 0;
+  });
+
   useEffect(() => {
     const interval = setInterval(() => {
-      setCallTime((prev) => prev + 1);
+      const start = Number(localStorage.getItem("callStartTime"));
+      if (start) {
+        setCallTime(Math.floor((Date.now() - start) / 1000));
+      }
     }, 1000);
+
     return () => clearInterval(interval);
   }, []);
 
@@ -33,6 +41,7 @@ function VideoCall({ channelName }) {
     return `${h}:${m}:${s}`;
   };
 
+  /* ================= CALL INIT ================= */
   useEffect(() => {
     const init = async () => {
       try {
@@ -44,7 +53,11 @@ function VideoCall({ channelName }) {
         if (myId) socket.emit("register", myId);
 
         localStorage.setItem("activeCallChannel", channelName);
-window.dispatchEvent(new Event("call-state-changed"));
+        window.dispatchEvent(new Event("call-state-changed"));
+
+        if (!localStorage.getItem("callStartTime")) {
+          localStorage.setItem("callStartTime", Date.now());
+        }
 
         const forceLeave = async () => {
           localTracks.current.forEach((track) => {
@@ -53,8 +66,11 @@ window.dispatchEvent(new Event("call-state-changed"));
           });
 
           await client.leave();
+
           localStorage.removeItem("activeCallChannel");
-window.dispatchEvent(new Event("call-state-changed"));
+          localStorage.removeItem("callStartTime");
+          window.dispatchEvent(new Event("call-state-changed"));
+
           navigate("/chat");
         };
 
@@ -91,15 +107,15 @@ window.dispatchEvent(new Event("call-state-changed"));
     init();
 
     return () => {
-      if (!isCallMinimized.current) {
-        localTracks.current.forEach((track) => {
-          track.stop();
-          track.close();
-        });
+      if (isCallMinimized.current) return;
 
-        client.leave();
-        client.removeAllListeners();
-      }
+      localTracks.current.forEach((track) => {
+        track.stop();
+        track.close();
+      });
+
+      client.leave();
+      client.removeAllListeners();
     };
   }, [channelName, navigate]);
 
@@ -131,13 +147,8 @@ window.dispatchEvent(new Event("call-state-changed"));
     const micTrack = localTracks.current[0];
     if (!micTrack) return;
 
-    if (isMuted) {
-      await micTrack.setEnabled(true);
-      setIsMuted(false);
-    } else {
-      await micTrack.setEnabled(false);
-      setIsMuted(true);
-    }
+    await micTrack.setEnabled(isMuted);
+    setIsMuted(!isMuted);
   };
 
   /* ================= BACK TO CHAT ================= */
@@ -157,8 +168,11 @@ window.dispatchEvent(new Event("call-state-changed"));
 
     await client.leave();
     client.removeAllListeners();
+
     localStorage.removeItem("activeCallChannel");
-window.dispatchEvent(new Event("call-state-changed"));
+    localStorage.removeItem("callStartTime");
+    window.dispatchEvent(new Event("call-state-changed"));
+
     navigate("/chat");
   };
 
@@ -167,18 +181,15 @@ window.dispatchEvent(new Event("call-state-changed"));
       <div ref={remoteRef} className="remote-video" />
       <div ref={localRef} className="local-video" />
 
-      {/* TIMER */}
       <div className="call-timer">{formatTime(callTime)}</div>
 
       <div className="controls">
-        <button onClick={goBackToChat}>⬅️</button>
-        <button onClick={switchCamera}>🔄</button>
-        <button onClick={toggleMute}>
+        <button className="control-btn" onClick={goBackToChat}>⬅️</button>
+        <button className="control-btn" onClick={switchCamera}>🔄</button>
+        <button className="control-btn" onClick={toggleMute}>
           {isMuted ? "🔇" : "🎤"}
         </button>
-        <button className="end-btn" onClick={endCall}>
-          ❌
-        </button>
+        <button className="end-btn" onClick={endCall}>❌</button>
       </div>
     </div>
   );
